@@ -2,25 +2,22 @@
 FROM eclipse-temurin:17-jdk-alpine AS build
 WORKDIR /app
 
-# Copy Maven wrapper and pom.xml first for dependency caching
-COPY .mvn/ .mvn
-COPY mvnw pom.xml ./
-RUN chmod +x mvnw && ./mvnw dependency:go-offline -B
+# Copy all repository files
+COPY . .
 
-# Copy source code and build the JAR
-COPY src ./src
-RUN ./mvnw clean package -DskipTests
+# Make Maven wrapper executable and build executable JAR
+RUN chmod +x mvnw && ./mvnw clean package -DskipTests
 
-# Stage 2: Production JRE Runtime
+# Stage 2: Minimal Production JRE Runtime
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 
-# Copy compiled JAR from build stage
+# Copy built JAR from build stage
 COPY --from=build /app/target/*.jar app.jar
 
 # Expose Render PORT
 ENV PORT=8080
 EXPOSE 8080
 
-# Run Spring Boot App
-ENTRYPOINT ["java", "-jar", "AudioService-0.0.1-SNAPSHOT.jar"]
+# Run Spring Boot Application
+ENTRYPOINT ["java", "-jar", "app.jar"]
