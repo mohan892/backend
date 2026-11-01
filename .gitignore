@@ -32,3 +32,8 @@ build/
 ### VS Code ###
 .vscode/
 /bin/
+# Firebase & Secret Files
+**/google-services.json
+**/serviceAccountKey.json
+*.pem
+*.key
