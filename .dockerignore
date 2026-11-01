@@ -1,0 +1,9 @@
+.git
+.gitignore
+.settings
+.classpath
+.project
+bin
+target
+*.jar
+*.log
