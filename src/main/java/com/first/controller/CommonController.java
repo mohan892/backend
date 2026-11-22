@@ -45,11 +45,7 @@ public class CommonController {
 
     public CommonController() {
         System.out.println("[CommonController] Initializing CommonController with seed companion directory...");
-        userStore.put("2041", new UserDto("2041", "Janani", "+91 9876543210", "Female", "Tamil", "online", "ic_lady", "24 yrs", true, "₹ 40/min"));
-        userStore.put("2088", new UserDto("2088", "Priya", "+91 9876543211", "Female", "Tamil", "online", "ic_lady", "26 yrs", true, "₹ 50/min"));
-        userStore.put("2099", new UserDto("2099", "Eshwari", "+91 9876543212", "Female", "Tamil", "offline", "ic_lady", "850 calls", false, "₹ 10/min"));
-        userStore.put("2100", new UserDto("2100", "Hema", "+91 9876543213", "Female", "Tamil", "in_call", "ic_lady", "25 yrs", true, "₹ 30/min"));
-
+      
         long now = System.currentTimeMillis();
         historyStore.add(new CallHistoryDto("1", "user_1", "You", "Priya", "03:45", now - 3600000));
         historyStore.add(new CallHistoryDto("2", "user_1", "You", "Janani", "01:20", now - 7200000));

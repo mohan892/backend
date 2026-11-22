@@ -21,6 +21,7 @@ public class AudioServiceApplication {
 		SpringApplication.run(AudioServiceApplication.class, args);
 	}
 
+	
 	@PostConstruct
 	public void initFirebase() {
 		try {
