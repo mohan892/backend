@@ -25,7 +25,7 @@ public class AudioServiceApplication {
 	public void initFirebase() {
 		try {
 			if (FirebaseApp.getApps().isEmpty()) {
-				ClassPathResource resource = new ClassPathResource("serviceAccountKey.json");
+				ClassPathResource resource = new ClassPathResource("/etc/secrets/serviceAccountKey.json");
 				if (resource.exists()) {
 					try (InputStream serviceAccount = resource.getInputStream()) {
 						String keyContent = new String(serviceAccount.readAllBytes());
