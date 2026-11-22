@@ -5,9 +5,11 @@ import com.first.security.FirebaseAuthInterceptor;
 import com.first.service.AgoraTokenService;
 import com.first.service.FcmPushService;
 import com.google.api.core.ApiFuture;
+import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.QuerySnapshot;
+import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.FirebaseToken;
@@ -35,31 +37,32 @@ public class CommonController {
     @Autowired
     private FcmPushService fcmPushService;
 
-    // In-memory data stores for fast local fallback
+    // In-memory data stores for active sessions
     private final Map<String, UserDto> userStore = new HashMap<>();
     private final List<CallHistoryDto> historyStore = new ArrayList<>();
     private final Map<String, CallRequestDto> activeCallsStore = new HashMap<>();
-    private final Map<String, String> fcmTokenStore = new HashMap<>();
+    private static final Map<String, String> fcmTokenStore = new HashMap<>();
 
     public CommonController() {
-        System.out.println("[CommonController] Initializing CommonController with default seed data...");
+        System.out.println("[CommonController] Initializing CommonController with seed companion directory...");
         userStore.put("2041", new UserDto("2041", "Janani", "+91 9876543210", "Female", "Tamil", "online", "ic_lady", "24 yrs", true, "₹ 40/min"));
         userStore.put("2088", new UserDto("2088", "Priya", "+91 9876543211", "Female", "Tamil", "online", "ic_lady", "26 yrs", true, "₹ 50/min"));
         userStore.put("2099", new UserDto("2099", "Eshwari", "+91 9876543212", "Female", "Tamil", "offline", "ic_lady", "850 calls", false, "₹ 10/min"));
+        userStore.put("2100", new UserDto("2100", "Hema", "+91 9876543213", "Female", "Tamil", "in_call", "ic_lady", "25 yrs", true, "₹ 30/min"));
 
         long now = System.currentTimeMillis();
-        historyStore.add(new CallHistoryDto("1", "You", "Priya", "03:45", now - 3600000));
-        historyStore.add(new CallHistoryDto("2", "You", "Janani", "01:20", now - 7200000));
-        historyStore.add(new CallHistoryDto("3", "You", "Eshwari", "05:10", now - 86400000));
+        historyStore.add(new CallHistoryDto("1", "user_1", "You", "Priya", "03:45", now - 3600000));
+        historyStore.add(new CallHistoryDto("2", "user_1", "You", "Janani", "01:20", now - 7200000));
+        historyStore.add(new CallHistoryDto("3", "user_1", "You", "Eshwari", "05:10", now - 86400000));
         System.out.println("[CommonController] Initialization completed successfully.");
     }
 
     /**
      * 1. Send OTP Request
-     * POST /api/auth/otp/send & POST /api/otp/send
+     * POST /api/auth/otp/send
      */
     @Operation(summary = "Request Phone Number OTP Challenge")
-    @PostMapping({"/auth/otp/send", "/otp/send"})
+    @PostMapping("/auth/otp/send")
     public ResponseEntity<Map<String, Object>> sendOtp(@RequestBody Map<String, String> payload) {
         System.out.println("[START] sendOtp() called with payload: " + payload);
         Map<String, Object> response = new HashMap<>();
@@ -105,10 +108,10 @@ public class CommonController {
 
     /**
      * 2. Verify OTP Code
-     * POST /api/auth/otp/verify & POST /api/otp/verify
+     * POST /api/auth/otp/verify
      */
     @Operation(summary = "Verify OTP Code / Firebase ID Token")
-    @PostMapping({"/auth/otp/verify", "/otp/verify"})
+    @PostMapping("/auth/otp/verify")
     public ResponseEntity<Map<String, Object>> verifyOtp(@RequestBody Map<String, String> payload) {
         System.out.println("[START] verifyOtp() called with payload: " + payload);
         Map<String, Object> response = new HashMap<>();
@@ -154,11 +157,11 @@ public class CommonController {
     }
 
     /**
-     * 3. Firebase Mobile Registration & Firestore User Creation
-     * POST /api/auth/register & POST /api/register
+     * 3. Firebase Mobile Registration
+     * POST /api/auth/register
      */
-    @Operation(summary = "Register User Profile")
-    @PostMapping({"/auth/register", "/register"})
+    @Operation(summary = "Register User Profile in Firebase Firestore")
+    @PostMapping("/auth/register")
     public ResponseEntity<Map<String, Object>> registerUser(@RequestBody RegisterRequest request) {
         System.out.println("[START] registerUser() called for name: " + request.getName() + ", phone: " + request.getPhone());
         Map<String, Object> response = new HashMap<>();
@@ -178,7 +181,7 @@ public class CommonController {
 
         UserDto newUser = new UserDto(
                 uid,
-                request.getName() != null ? request.getName() : "Companion",
+                request.getName() != null ? request.getName() : "User",
                 request.getPhone(),
                 request.getGender() != null ? request.getGender() : "Male",
                 request.getLanguage() != null ? request.getLanguage() : "English",
@@ -186,23 +189,26 @@ public class CommonController {
                 avatar,
                 "24 yrs",
                 true,
-                "₹ 40/min"
+                "₹ 40/min",
+                null
         );
 
         try {
-            Firestore db = FirestoreClient.getFirestore();
-            if (db != null) {
-                db.collection("users").document(uid).set(newUser);
-                System.out.println("[registerUser] Saved user profile to Firestore (UID: " + uid + ")");
+            if (!FirebaseApp.getApps().isEmpty()) {
+                Firestore db = FirestoreClient.getFirestore();
+                if (db != null) {
+                    db.collection("users").document(uid).set(newUser);
+                    System.out.println("[registerUser] Saved real user profile to Firestore (UID: " + uid + ")");
+                }
             }
-        } catch (Exception e) {
-            System.out.println("[registerUser] Firestore write notice: " + e.getMessage());
+        } catch (Throwable t) {
+            System.out.println("[registerUser] Firestore write notice: " + t.getMessage());
         }
 
         userStore.put(uid, newUser);
 
         response.put("status", true);
-        response.put("message", "User registered and profile created successfully!");
+        response.put("message", "User registered and profile created in Firebase Firestore!");
         response.put("data", newUser);
         response.put("grantToken", "server_token_" + uid);
 
@@ -211,11 +217,48 @@ public class CommonController {
     }
 
     /**
-     * 4. Mobile Login & Verification Endpoint
-     * POST /api/auth/login-mobile & POST /api/login
+     * 4. Register FCM Push Token
+     * POST /api/users/fcm-token
+     */
+    @Operation(summary = "Register FCM Push Notification Token for User")
+    @PostMapping("/users/fcm-token")
+    public ResponseEntity<Map<String, Object>> registerFcmToken(@RequestBody Map<String, String> payload) {
+        System.out.println("[START] registerFcmToken() called with payload: " + payload);
+        Map<String, Object> response = new HashMap<>();
+        String uid = payload.get("uid");
+        String fcmToken = payload.get("fcmToken");
+
+        if (uid != null && !uid.isEmpty() && fcmToken != null && !fcmToken.isEmpty()) {
+            fcmTokenStore.put(uid, fcmToken);
+            System.out.println("[registerFcmToken] Successfully bound FCM Token uniquely to UID: " + uid);
+
+            try {
+                if (!FirebaseApp.getApps().isEmpty()) {
+                    Firestore db = FirestoreClient.getFirestore();
+                    if (db != null) {
+                        Map<String, Object> update = new HashMap<>();
+                        update.put("fcmToken", fcmToken);
+                        db.collection("users").document(uid).set(update, com.google.cloud.firestore.SetOptions.merge());
+                        System.out.println("[registerFcmToken] Updated FCM Token in Firestore (UID: " + uid + ")");
+                    }
+                }
+            } catch (Throwable t) {
+                System.out.println("[registerFcmToken] Firestore notice: " + t.getMessage());
+            }
+        }
+
+        response.put("status", true);
+        response.put("message", "FCM token registered successfully");
+        System.out.println("[END] registerFcmToken() completed for UID: " + uid);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 5. Mobile Login & Verification Endpoint
+     * POST /api/auth/login-mobile
      */
     @Operation(summary = "Authenticate Existing Mobile Session")
-    @PostMapping({"/auth/login-mobile", "/login"})
+    @PostMapping("/auth/login-mobile")
     public ResponseEntity<Map<String, Object>> loginMobile(@RequestBody Map<String, String> payload) {
         System.out.println("[START] loginMobile() called with payload: " + payload);
         Map<String, Object> response = new HashMap<>();
@@ -238,7 +281,7 @@ public class CommonController {
 
         if (existingUser == null) {
             String uid = "user_" + System.currentTimeMillis();
-            existingUser = new UserDto(uid, "User", phone, "Male", "English", "online", "ic_user", "24 yrs", true, "₹ 40/min");
+            existingUser = new UserDto(uid, "User", phone, "Male", "English", "online", "ic_user", "24 yrs", true, "₹ 40/min", null);
             userStore.put(uid, existingUser);
             System.out.println("[loginMobile] Created new user session in memory (UID: " + uid + ")");
         } else {
@@ -253,11 +296,11 @@ public class CommonController {
     }
 
     /**
-     * 5. Update Profile (Name, Phone, Avatar)
-     * POST /api/profile/update & POST /api/user/update
+     * 6. Update Profile
+     * POST /api/profile/update
      */
     @Operation(summary = "Update User Name, Avatar, and Gender")
-    @PostMapping({"/profile/update", "/user/update"})
+    @PostMapping("/profile/update")
     public ResponseEntity<Map<String, Object>> updateProfile(@RequestBody UserDto request) {
         System.out.println("[START] updateProfile() called for UID: " + request.getUid());
         Map<String, Object> response = new HashMap<>();
@@ -280,13 +323,15 @@ public class CommonController {
         }
 
         try {
-            Firestore db = FirestoreClient.getFirestore();
-            if (db != null) {
-                db.collection("users").document(uid).set(request);
-                System.out.println("[updateProfile] Saved updated profile to Firestore (UID: " + uid + ")");
+            if (!FirebaseApp.getApps().isEmpty()) {
+                Firestore db = FirestoreClient.getFirestore();
+                if (db != null) {
+                    db.collection("users").document(uid).set(request);
+                    System.out.println("[updateProfile] Saved updated profile to Firestore (UID: " + uid + ")");
+                }
             }
-        } catch (Exception e) {
-            System.out.println("[updateProfile] Firestore notice: " + e.getMessage());
+        } catch (Throwable t) {
+            System.out.println("[updateProfile] Firestore notice: " + t.getMessage());
         }
 
         response.put("status", true);
@@ -296,42 +341,41 @@ public class CommonController {
     }
 
     /**
-     * 6. Fetch All Available Companions / Users
+     * 7. Fetch All Users Directory
      * GET /api/users
      */
-    @Operation(summary = "Fetch Directory of Available Companions")
+    @Operation(summary = "Fetch Directory of All Users")
     @GetMapping("/users")
-    public ResponseEntity<Map<String, Object>> getAllUsers(@RequestParam(required = false) String currentUid) {
-        System.out.println("[START] getAllUsers() called with currentUid: " + currentUid);
+    public ResponseEntity<Map<String, Object>> getAllUsers() {
+        System.out.println("[START] getAllUsers() called");
         Map<String, Object> response = new HashMap<>();
         List<UserDto> usersList = new ArrayList<>();
 
         try {
-            Firestore db = FirestoreClient.getFirestore();
-            if (db != null) {
-                ApiFuture<QuerySnapshot> future = db.collection("users").get();
-                List<QueryDocumentSnapshot> docs = future.get().getDocuments();
-                for (QueryDocumentSnapshot doc : docs) {
-                    UserDto u = doc.toObject(UserDto.class);
-                    if (u != null) {
-                        if (currentUid == null || !currentUid.equals(u.getUid())) {
+            if (!FirebaseApp.getApps().isEmpty()) {
+                Firestore db = FirestoreClient.getFirestore();
+                if (db != null) {
+                    ApiFuture<QuerySnapshot> future = db.collection("users").get();
+                    List<QueryDocumentSnapshot> docs = future.get().getDocuments();
+                    for (QueryDocumentSnapshot doc : docs) {
+                        UserDto u = doc.toObject(UserDto.class);
+                        if (u != null) {
                             usersList.add(u);
+                            if (u.getFcmToken() != null && !u.getFcmToken().isEmpty()) {
+                                fcmTokenStore.put(u.getUid(), u.getFcmToken());
+                            }
                         }
                     }
+                    System.out.println("[getAllUsers] Fetched " + usersList.size() + " real users from Firestore DB");
                 }
-                System.out.println("[getAllUsers] Fetched " + usersList.size() + " users from Firestore");
             }
-        } catch (Exception e) {
-            System.out.println("[getAllUsers] Firestore notice: " + e.getMessage());
+        } catch (Throwable t) {
+            System.out.println("[getAllUsers] Firestore query notice: " + t.getMessage());
         }
 
         if (usersList.isEmpty()) {
-            for (UserDto u : userStore.values()) {
-                if (currentUid == null || !currentUid.equals(u.getUid())) {
-                    usersList.add(u);
-                }
-            }
-            System.out.println("[getAllUsers] Loaded " + usersList.size() + " users from in-memory fallback store");
+            usersList.addAll(userStore.values());
+            System.out.println("[getAllUsers] Loaded " + usersList.size() + " active companions from in-memory store");
         }
 
         response.put("status", true);
@@ -344,19 +388,19 @@ public class CommonController {
     }
 
     /**
-     * 7. Update User Online/Offline Status
+     * 8. Update User Status
      * POST /api/users/status
      */
     @Operation(summary = "Update User Online / Offline Status")
     @PostMapping("/users/status")
-    public ResponseEntity<Map<String, Object>> updateStatus(@RequestBody Map<String, String> payload) {
+    public ResponseEntity<Map<String, String>> updateStatus(@RequestBody Map<String, String> payload) {
         System.out.println("[START] updateStatus() called with payload: " + payload);
-        Map<String, Object> response = new HashMap<>();
+        Map<String, String> response = new HashMap<>();
         String uid = payload.get("uid");
         String status = payload.get("status");
 
         if (uid == null || status == null) {
-            response.put("status", false);
+            response.put("status", "false");
             response.put("message", "UID and status are required");
             System.out.println("[END] updateStatus() failed: UID or status missing");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
@@ -368,24 +412,26 @@ public class CommonController {
         }
 
         try {
-            Firestore db = FirestoreClient.getFirestore();
-            if (db != null) {
-                db.collection("users").document(uid).update("status", status);
+            if (!FirebaseApp.getApps().isEmpty()) {
+                Firestore db = FirestoreClient.getFirestore();
+                if (db != null) {
+                    db.collection("users").document(uid).update("status", status);
+                }
             }
-        } catch (Exception ignored) {}
+        } catch (Throwable ignored) {}
 
-        response.put("status", true);
+        response.put("status", "true");
         response.put("message", "Online status updated to " + status);
         System.out.println("[END] updateStatus() completed for UID: " + uid);
         return ResponseEntity.ok(response);
     }
 
     /**
-     * 8. Show Admin Announcement Message
-     * GET /api/announcements & GET /api/announcement
+     * 9. Show Admin Announcement Message
+     * GET /api/announcements
      */
     @Operation(summary = "Fetch Admin Broadcast Notice")
-    @GetMapping({"/announcements", "/announcement"})
+    @GetMapping("/announcements")
     public ResponseEntity<Map<String, Object>> getAdminAnnouncement() {
         System.out.println("[START] getAdminAnnouncement() called");
         Map<String, Object> response = new HashMap<>();
@@ -405,11 +451,11 @@ public class CommonController {
     }
 
     /**
-     * 9. Initiate Audio Call Signaling
-     * POST /api/calls/initiate & POST /api/call/start
+     * 10. Initiate Audio Call Signaling & Send FCM Push
+     * POST /api/calls/initiate
      */
     @Operation(summary = "Initiate 1-on-1 Outgoing Audio Call & Send FCM Push Notification")
-    @PostMapping({"/calls/initiate", "/call/start"})
+    @PostMapping("/calls/initiate")
     public ResponseEntity<Map<String, Object>> initiateCall(@RequestBody CallRequestDto callReq) {
         System.out.println("[START] initiateCall() called for callee: " + callReq.getCalleeName() + " (CalleeUID: " + callReq.getCalleeUid() + ")");
         Map<String, Object> response = new HashMap<>();
@@ -430,29 +476,45 @@ public class CommonController {
         callReq.setStatus("RINGING");
         callReq.setTimestamp(System.currentTimeMillis());
 
-        // Generate Secure Server-Side Agora RTC Token
         int callerNumericUid = Math.abs(callReq.getCallerUid() != null ? callReq.getCallerUid().hashCode() : 1001);
         String callerAgoraToken = agoraTokenService.generateRtcToken(callReq.getChannelName(), callerNumericUid, 3600);
-        System.out.println("[initiateCall] Generated Agora Token for caller numeric UID: " + callerNumericUid);
 
         activeCallsStore.put(callReq.getChannelName(), callReq);
 
-        // Send FCM Notification to Callee
-        if (callReq.getCalleeUid() != null && fcmTokenStore.containsKey(callReq.getCalleeUid())) {
-            String targetFcm = fcmTokenStore.get(callReq.getCalleeUid());
-            System.out.println("[initiateCall] Sending FCM Notification to target token for callee: " + callReq.getCalleeUid());
+        String calleeUid = callReq.getCalleeUid();
+        String targetFcm = calleeUid != null ? fcmTokenStore.get(calleeUid) : null;
+
+        if ((targetFcm == null || targetFcm.isEmpty()) && calleeUid != null && !FirebaseApp.getApps().isEmpty()) {
+            try {
+                Firestore db = FirestoreClient.getFirestore();
+                if (db != null) {
+                    DocumentSnapshot calleeDoc = db.collection("users").document(calleeUid).get().get();
+                    if (calleeDoc.exists() && calleeDoc.getString("fcmToken") != null) {
+                        targetFcm = calleeDoc.getString("fcmToken");
+                        fcmTokenStore.put(calleeUid, targetFcm);
+                        System.out.println("[initiateCall] Found target FCM Token in Firestore for callee UID: " + calleeUid);
+                    }
+                }
+            } catch (Throwable t) {
+                System.out.println("[initiateCall] Firestore FCM lookup notice: " + t.getMessage());
+            }
+        }
+
+        if (targetFcm != null && !targetFcm.isEmpty()) {
+            System.out.println("[initiateCall] Sending high-priority FCM push to callee UID: " + calleeUid);
             fcmPushService.sendIncomingCallNotification(targetFcm, callReq.getCallerName(), callReq.getCallerUid(), callReq.getChannelName(), callReq.getCallId());
         } else {
-            System.out.println("[initiateCall] Notice: Callee FCM token not found in memory store. Signal written to Firestore.");
+            System.out.println("[initiateCall] Notice: Callee FCM token not registered for UID: " + calleeUid + ". Signal written to Firestore.");
         }
 
         try {
-            Firestore db = FirestoreClient.getFirestore();
-            if (db != null) {
-                db.collection("calls").document(callReq.getChannelName()).set(callReq);
-                System.out.println("[initiateCall] Saved call request to Firestore document: " + callReq.getChannelName());
+            if (!FirebaseApp.getApps().isEmpty()) {
+                Firestore db = FirestoreClient.getFirestore();
+                if (db != null) {
+                    db.collection("calls").document(callReq.getChannelName()).set(callReq);
+                }
             }
-        } catch (Exception ignored) {}
+        } catch (Throwable ignored) {}
 
         Map<String, Object> returnData = new HashMap<>();
         returnData.put("callId", callReq.getCallId());
@@ -470,64 +532,150 @@ public class CommonController {
     }
 
     /**
-     * 10. Update Call Signaling Status (ringing, accepted, rejected, ended)
-     * POST /api/calls/status & POST /api/call/end
+     * 11. Accept Call
+     * POST /api/calls/accept
      */
-    @Operation(summary = "Update Call Signaling Status (Accepted / Rejected / Ended)")
-    @PostMapping({"/calls/status", "/call/end"})
-    public ResponseEntity<Map<String, Object>> updateCallStatus(@RequestBody Map<String, String> payload) {
-        System.out.println("[START] updateCallStatus() called with payload: " + payload);
+    @Operation(summary = "Accept Incoming Audio Call")
+    @PostMapping("/calls/accept")
+    public ResponseEntity<Map<String, Object>> acceptCall(@RequestBody Map<String, String> payload) {
+        System.out.println("[START] acceptCall() called with payload: " + payload);
         Map<String, Object> response = new HashMap<>();
         String channelName = payload.getOrDefault("channelName", "testChannel");
-        String status = payload.get("status");
+        String calleeUid = FirebaseAuthInterceptor.AUTHENTICATED_UID.get();
+
+        if (calleeUid == null || calleeUid.isEmpty()) {
+            calleeUid = payload.getOrDefault("calleeUid", "callee_2001");
+        }
+
+        int calleeNumericUid = Math.abs(calleeUid.hashCode());
+        String calleeAgoraToken = agoraTokenService.generateRtcToken(channelName, calleeNumericUid, 3600);
 
         if (activeCallsStore.containsKey(channelName)) {
-            activeCallsStore.get(channelName).setStatus(status);
-            System.out.println("[updateCallStatus] Updated active call status to '" + status + "' for channel: " + channelName);
+            activeCallsStore.get(channelName).setStatus("ACCEPTED");
         }
 
         try {
-            Firestore db = FirestoreClient.getFirestore();
-            if (db != null) {
-                Map<String, Object> update = new HashMap<>();
-                update.put("status", status);
-                update.put("timestamp", System.currentTimeMillis());
-                db.collection("calls").document(channelName).set(update);
-                System.out.println("[updateCallStatus] Saved updated call status to Firestore: " + status);
+            if (!FirebaseApp.getApps().isEmpty()) {
+                Firestore db = FirestoreClient.getFirestore();
+                if (db != null) {
+                    Map<String, Object> update = new HashMap<>();
+                    update.put("status", "ACCEPTED");
+                    update.put("timestamp", System.currentTimeMillis());
+                    db.collection("calls").document(channelName).set(update, com.google.cloud.firestore.SetOptions.merge());
+                }
             }
-        } catch (Exception ignored) {}
+        } catch (Throwable ignored) {}
+
+        Map<String, Object> returnData = new HashMap<>();
+        returnData.put("channelName", channelName);
+        returnData.put("agoraToken", calleeAgoraToken);
+        returnData.put("numericUid", calleeNumericUid);
+        returnData.put("status", "ACCEPTED");
 
         response.put("status", true);
-        response.put("message", "Call status updated to " + status);
-        System.out.println("[END] updateCallStatus() completed for status: " + status);
+        response.put("message", "Call accepted");
+        response.put("data", returnData);
+
+        System.out.println("[END] acceptCall() completed successfully");
         return ResponseEntity.ok(response);
     }
 
     /**
-     * 11. Fetch Call History Log
-     * GET /api/call-history & GET /api/call_history & GET /api/history
+     * 12. Reject Call
+     * POST /api/calls/reject
      */
-    @Operation(summary = "Fetch Grouped Call History Records")
-    @GetMapping({"/call-history", "/call_history", "/history"})
-    public ResponseEntity<Map<String, Object>> getCallHistory() {
-        System.out.println("[START] getCallHistory() called");
+    @Operation(summary = "Reject Incoming Audio Call")
+    @PostMapping("/calls/reject")
+    public ResponseEntity<Map<String, Object>> rejectCall(@RequestBody Map<String, String> payload) {
+        System.out.println("[START] rejectCall() called with payload: " + payload);
+        Map<String, Object> response = new HashMap<>();
+        String channelName = payload.getOrDefault("channelName", "testChannel");
+
+        if (activeCallsStore.containsKey(channelName)) {
+            activeCallsStore.get(channelName).setStatus("REJECTED");
+        }
+
+        try {
+            if (!FirebaseApp.getApps().isEmpty()) {
+                Firestore db = FirestoreClient.getFirestore();
+                if (db != null) {
+                    Map<String, Object> update = new HashMap<>();
+                    update.put("status", "REJECTED");
+                    update.put("timestamp", System.currentTimeMillis());
+                    db.collection("calls").document(channelName).set(update, com.google.cloud.firestore.SetOptions.merge());
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        response.put("status", true);
+        response.put("message", "Call rejected");
+        System.out.println("[END] rejectCall() completed");
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 13. End Call
+     * POST /api/calls/end
+     */
+    @Operation(summary = "End Active Audio Call")
+    @PostMapping("/calls/end")
+    public ResponseEntity<Map<String, Object>> endCall(@RequestBody Map<String, String> payload) {
+        System.out.println("[START] endCall() called with payload: " + payload);
+        Map<String, Object> response = new HashMap<>();
+        String channelName = payload.getOrDefault("channelName", "testChannel");
+
+        if (activeCallsStore.containsKey(channelName)) {
+            activeCallsStore.get(channelName).setStatus("ENDED");
+        }
+
+        try {
+            if (!FirebaseApp.getApps().isEmpty()) {
+                Firestore db = FirestoreClient.getFirestore();
+                if (db != null) {
+                    Map<String, Object> update = new HashMap<>();
+                    update.put("status", "ENDED");
+                    update.put("timestamp", System.currentTimeMillis());
+                    db.collection("calls").document(channelName).set(update, com.google.cloud.firestore.SetOptions.merge());
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        response.put("status", true);
+        response.put("message", "Call ended successfully");
+        System.out.println("[END] endCall() completed");
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 14. Fetch Call History Log
+     * GET /api/call-history
+     */
+    @Operation(summary = "Fetch Grouped Call History Records by User UID")
+    @GetMapping("/call-history")
+    public ResponseEntity<Map<String, Object>> getCallHistory(@RequestParam(required = false) String uid) {
+        System.out.println("[START] getCallHistory() called with uid: " + uid);
+        List<CallHistoryDto> userHistory = new ArrayList<>();
+        for (CallHistoryDto h : historyStore) {
+            if (uid == null || uid.isEmpty() || (h.getUserId() != null && h.getUserId().equals(uid))) {
+                userHistory.add(h);
+            }
+        }
         Map<String, Object> response = new HashMap<>();
         response.put("status", true);
-        response.put("count", historyStore.size());
-        response.put("data", historyStore);
-        System.out.println("[END] getCallHistory() completed with " + historyStore.size() + " records");
+        response.put("count", userHistory.size());
+        response.put("data", userHistory);
+        System.out.println("[END] getCallHistory() completed with " + userHistory.size() + " records");
         return ResponseEntity.ok(response);
     }
 
     /**
-     * 12. Record Completed Call to History
-     * POST /api/call-history & POST /api/call_history & POST /api/history
+     * 15. Record Completed Call to History
+     * POST /api/call-history
      */
     @Operation(summary = "Record Completed Audio Call Session")
-    @PostMapping({"/call-history", "/call_history", "/history"})
+    @PostMapping("/call-history")
     public ResponseEntity<Map<String, Object>> addCallHistory(@RequestBody CallHistoryDto history) {
         System.out.println("[START] addCallHistory() called for call with: " + history.getCalleeName());
-        Map<String, Object> response = new HashMap<>();
         if (history.getCallId() == null) {
             history.setCallId("call_" + System.currentTimeMillis());
         }
@@ -535,16 +683,23 @@ public class CommonController {
             history.setTimestamp(System.currentTimeMillis());
         }
 
+        String authUid = FirebaseAuthInterceptor.AUTHENTICATED_UID.get();
+        if (authUid != null && !authUid.isEmpty()) {
+            history.setUserId(authUid);
+        }
+
         historyStore.add(0, history);
 
         try {
-            Firestore db = FirestoreClient.getFirestore();
-            if (db != null) {
-                db.collection("call_history").document(history.getCallId()).set(history);
-                System.out.println("[addCallHistory] Saved call history to Firestore (ID: " + history.getCallId() + ")");
+            if (!FirebaseApp.getApps().isEmpty()) {
+                Firestore db = FirestoreClient.getFirestore();
+                if (db != null) {
+                    db.collection("call_history").document(history.getCallId()).set(history);
+                }
             }
-        } catch (Exception ignored) {}
+        } catch (Throwable ignored) {}
 
+        Map<String, Object> response = new HashMap<>();
         response.put("status", true);
         response.put("message", "Call history saved");
         response.put("data", history);

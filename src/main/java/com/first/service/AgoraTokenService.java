@@ -13,7 +13,7 @@ public class AgoraTokenService {
 
     // Agora Production Credentials
     private static final String AGORA_APP_ID = "b54ec08a69eb486cad4a2d858b41ade2";
-    private static final String AGORA_APP_CERTIFICATE = "0123456789abcdef0123456789abcdef"; // Configured securely on backend
+    private static final String AGORA_APP_CERTIFICATE = "03d1f1ad69bb4fa89ce28db7330fb997"; // Configured securely on backend
 
     public String generateRtcToken(String channelName, int uid, int expireSeconds) {
         System.out.println("[START] AgoraTokenService.generateRtcToken() called for channel: " + channelName + ", numeric UID: " + uid);

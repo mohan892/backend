@@ -11,10 +11,11 @@ public class UserDto {
     private String age;
     private boolean verified;
     private String rate;
+    private String fcmToken;
 
     public UserDto() {}
 
-    public UserDto(String uid, String name, String phone, String gender, String language, String status, String avatar, String age, boolean verified, String rate) {
+    public UserDto(String uid, String name, String phone, String gender, String language, String status, String avatar, String age, boolean verified, String rate, String fcmToken) {
         this.uid = uid;
         this.name = name;
         this.phone = phone;
@@ -25,6 +26,11 @@ public class UserDto {
         this.age = age;
         this.verified = verified;
         this.rate = rate;
+        this.fcmToken = fcmToken;
+    }
+
+    public UserDto(String uid, String name, String phone, String gender, String language, String status, String avatar, String age, boolean verified, String rate) {
+        this(uid, name, phone, gender, language, status, avatar, age, verified, rate, null);
     }
 
     public String getUid() { return uid; }
@@ -56,4 +62,7 @@ public class UserDto {
 
     public String getRate() { return rate; }
     public void setRate(String rate) { this.rate = rate; }
+
+    public String getFcmToken() { return fcmToken; }
+    public void setFcmToken(String fcmToken) { this.fcmToken = fcmToken; }
 }
