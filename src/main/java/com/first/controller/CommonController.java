@@ -47,11 +47,7 @@ public class CommonController {
         System.out.println("[CommonController] Initializing CommonController with seed companion directory...");
       
         long now = System.currentTimeMillis();
-        historyStore.add(new CallHistoryDto("1", "user_1", "You", "Priya", "03:45", now - 3600000));
-        historyStore.add(new CallHistoryDto("2", "user_1", "You", "Janani", "01:20", now - 7200000));
-        historyStore.add(new CallHistoryDto("3", "user_1", "You", "Eshwari", "05:10", now - 86400000));
-        System.out.println("[CommonController] Initialization completed successfully.");
-    }
+      
 
     /**
      * 1. Send OTP Request
