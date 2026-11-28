@@ -12,6 +12,7 @@ public class UserDto {
     private boolean verified;
     private String rate;
     private String fcmToken;
+    private int coinBalance = 240;
 
     public UserDto() {}
 
@@ -27,6 +28,7 @@ public class UserDto {
         this.verified = verified;
         this.rate = rate;
         this.fcmToken = fcmToken;
+        this.coinBalance = 240;
     }
 
     public UserDto(String uid, String name, String phone, String gender, String language, String status, String avatar, String age, boolean verified, String rate) {
@@ -65,4 +67,7 @@ public class UserDto {
 
     public String getFcmToken() { return fcmToken; }
     public void setFcmToken(String fcmToken) { this.fcmToken = fcmToken; }
+
+    public int getCoinBalance() { return coinBalance; }
+    public void setCoinBalance(int coinBalance) { this.coinBalance = coinBalance; }
 }

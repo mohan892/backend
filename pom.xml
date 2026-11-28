@@ -32,6 +32,13 @@
 			<version>9.2.0</version>
 		</dependency>
 
+		<!-- Razorpay Java SDK -->
+		<dependency>
+			<groupId>com.razorpay</groupId>
+			<artifactId>razorpay-java</artifactId>
+			<version>1.4.6</version>
+		</dependency>
+
 		<!-- SpringDoc OpenAPI / Swagger UI -->
 		<dependency>
 			<groupId>org.springdoc</groupId>

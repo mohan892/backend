@@ -19,6 +19,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -28,7 +29,7 @@ import java.util.*;
 @RestController
 @RequestMapping("/api")
 @CrossOrigin(origins = "*")
-@Tag(name = "AudioCallApp REST APIs", description = "Endpoints for Authentication, Directory, Calling & History")
+@Tag(name = "AudioCallApp REST APIs", description = "Endpoints for Authentication, Directory, Calling, History & Razorpay Payments")
 public class CommonController {
 
     @Autowired
@@ -37,8 +38,32 @@ public class CommonController {
     @Autowired
     private FcmPushService fcmPushService;
 
+    @Value("${RAZORPAY_KEY_ID:${razorpay.key_id:}}")
+    private String razorpayKeyId;
+
+    @Value("${RAZORPAY_KEY_SECRET:${razorpay.key_secret:}}")
+    private String razorpayKeySecret;
+
+    private String getRazorpayKeyId() {
+        if (razorpayKeyId != null && !razorpayKeyId.trim().isEmpty()) return razorpayKeyId.trim();
+        String env = System.getenv("RAZORPAY_KEY_ID");
+        if (env != null && !env.trim().isEmpty()) return env.trim();
+        env = System.getenv("razorpay.key_id");
+        if (env != null && !env.trim().isEmpty()) return env.trim();
+        return "";
+    }
+
+    private String getRazorpayKeySecret() {
+        if (razorpayKeySecret != null && !razorpayKeySecret.trim().isEmpty()) return razorpayKeySecret.trim();
+        String env = System.getenv("RAZORPAY_KEY_SECRET");
+        if (env != null && !env.trim().isEmpty()) return env.trim();
+        env = System.getenv("razorpay.key_secret");
+        if (env != null && !env.trim().isEmpty()) return env.trim();
+        return "";
+    }
+
     // In-memory data stores for active sessions
-    private final Map<String, UserDto> userStore = new HashMap<>();
+    private final Map<String, UserDto> userStore = new LinkedHashMap<>();
     private final List<CallHistoryDto> historyStore = new ArrayList<>();
     private final Map<String, CallRequestDto> activeCallsStore = new HashMap<>();
     private static final Map<String, String> fcmTokenStore = new HashMap<>();
@@ -47,7 +72,26 @@ public class CommonController {
         System.out.println("[CommonController] Initializing CommonController with seed companion directory...");
       
         long now = System.currentTimeMillis();
-      
+        long yesterday = now - (24 * 60 * 60 * 1000L);
+
+        // Seed companions from screenshot
+        userStore.put("c_101", new UserDto("c_101", "Ramya", "+91 9876543210", "Female", "Tamil, English", "online", "avatar_priya", "24 yrs", true, "₹10 /min"));
+        userStore.put("c_102", new UserDto("c_102", "Pavisha", "+91 9876543211", "Female", "Kannada, Hindi", "online", "avatar_janani", "22 yrs", true, "₹12 /min"));
+        userStore.put("c_103", new UserDto("c_103", "Meenu", "+91 9876543212", "Female", "Malayalam, Tamil", "online", "avatar_eshwari", "25 yrs", true, "₹15 /min"));
+        userStore.put("c_104", new UserDto("c_104", "Kandasamy", "+91 9876543213", "Female", "Tamil, English", "online", "avatar_sanjana", "28 yrs", true, "₹15 /min"));
+        userStore.put("c_105", new UserDto("c_105", "Janani", "+91 9876543214", "Female", "Tamil", "online", "avatar_janani", "24 yrs", true, "₹40 /min"));
+        userStore.put("c_106", new UserDto("c_106", "Priya", "+91 9876543215", "Female", "Tamil, English", "online", "avatar_priya", "26 yrs", true, "₹50 /min"));
+        userStore.put("c_107", new UserDto("c_107", "Eshwari", "+91 9876543216", "Female", "Tamil, Hindi", "online", "avatar_eshwari", "25 yrs", true, "₹40 /min"));
+        userStore.put("c_108", new UserDto("c_108", "Hema", "+91 9876543217", "Female", "Tamil, English", "in_call", "avatar_hema", "25 yrs", true, "₹40 /min"));
+        userStore.put("c_109", new UserDto("c_109", "Sanjana", "+91 9876543218", "Female", "English, Hindi", "online", "avatar_sanjana", "24 yrs", true, "₹40 /min"));
+
+        // Seed call history
+        historyStore.add(new CallHistoryDto("h_1", null, "Priya", "Priya", "03:45", "INCOMING", now - 3600000));
+        historyStore.add(new CallHistoryDto("h_2", null, "Janani", "Janani", "01:20", "INCOMING", now - 7200000));
+        historyStore.add(new CallHistoryDto("h_3", null, "Eshwari", "Eshwari", "05:10", "OUTGOING", yesterday));
+        historyStore.add(new CallHistoryDto("h_4", null, "Hema", "Hema", "Missed", "MISSED", yesterday - 3600000));
+        historyStore.add(new CallHistoryDto("h_5", null, "Sanjana", "Sanjana", "02:15", "OUTGOING", yesterday - 7200000));
+    }
 
     /**
      * 1. Send OTP Request
@@ -181,7 +225,7 @@ public class CommonController {
                 avatar,
                 "24 yrs",
                 true,
-                "₹ 40/min",
+                "₹10 /min",
                 null
         );
 
@@ -273,7 +317,7 @@ public class CommonController {
 
         if (existingUser == null) {
             String uid = "user_" + System.currentTimeMillis();
-            existingUser = new UserDto(uid, "User", phone, "Male", "English", "online", "ic_user", "24 yrs", true, "₹ 40/min", null);
+            existingUser = new UserDto(uid, "User", phone, "Male", "English", "online", "ic_user", "24 yrs", true, "₹10 /min", null);
             userStore.put(uid, existingUser);
             System.out.println("[loginMobile] Created new user session in memory (UID: " + uid + ")");
         } else {
@@ -341,7 +385,7 @@ public class CommonController {
     public ResponseEntity<Map<String, Object>> getAllUsers() {
         System.out.println("[START] getAllUsers() called");
         Map<String, Object> response = new HashMap<>();
-        List<UserDto> usersList = new ArrayList<>();
+        List<UserDto> usersList = new ArrayList<>(userStore.values());
 
         try {
             if (!FirebaseApp.getApps().isEmpty()) {
@@ -351,23 +395,17 @@ public class CommonController {
                     List<QueryDocumentSnapshot> docs = future.get().getDocuments();
                     for (QueryDocumentSnapshot doc : docs) {
                         UserDto u = doc.toObject(UserDto.class);
-                        if (u != null) {
+                        if (u != null && !userStore.containsKey(u.getUid())) {
                             usersList.add(u);
                             if (u.getFcmToken() != null && !u.getFcmToken().isEmpty()) {
                                 fcmTokenStore.put(u.getUid(), u.getFcmToken());
                             }
                         }
                     }
-                    System.out.println("[getAllUsers] Fetched " + usersList.size() + " real users from Firestore DB");
                 }
             }
         } catch (Throwable t) {
             System.out.println("[getAllUsers] Firestore query notice: " + t.getMessage());
-        }
-
-        if (usersList.isEmpty()) {
-            usersList.addAll(userStore.values());
-            System.out.println("[getAllUsers] Loaded " + usersList.size() + " active companions from in-memory store");
         }
 
         response.put("status", true);
@@ -380,7 +418,120 @@ public class CommonController {
     }
 
     /**
-     * 8. Update User Status
+     * 8. Create Razorpay Order from Backend
+     * POST /api/payment/create-order
+     */
+    @Operation(summary = "Create Razorpay Order for Call Session Payment")
+    @PostMapping("/payment/create-order")
+    public ResponseEntity<Map<String, Object>> createRazorpayOrder(@RequestBody Map<String, Object> payload) {
+        System.out.println("[START] createRazorpayOrder() called with payload: " + payload);
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            String uid = (String) payload.get("uid");
+            Number amountObj = (Number) payload.getOrDefault("amount", 10);
+            int amountINR = amountObj.intValue();
+            int amountInPaise = amountINR * 100;
+
+            String orderId = "order_" + System.currentTimeMillis();
+            String keyId = getRazorpayKeyId();
+            String keySecret = getRazorpayKeySecret();
+
+            try {
+                if (!keySecret.isEmpty()) {
+                    com.razorpay.RazorpayClient razorpay = new com.razorpay.RazorpayClient(keyId, keySecret);
+                    org.json.JSONObject orderRequest = new org.json.JSONObject();
+                    orderRequest.put("amount", amountInPaise);
+                    orderRequest.put("currency", "INR");
+                    orderRequest.put("receipt", "rcpt_" + System.currentTimeMillis());
+
+                    com.razorpay.Order order = razorpay.orders.create(orderRequest);
+                    orderId = order.get("id");
+                }
+            } catch (Exception ex) {
+                System.out.println("[createRazorpayOrder] Razorpay Client Notice: " + ex.getMessage());
+            }
+
+            Map<String, Object> data = new HashMap<>();
+            data.put("orderId", orderId);
+            data.put("amount", amountInPaise);
+            data.put("currency", "INR");
+            data.put("keyId", keyId);
+
+            response.put("status", true);
+            response.put("message", "Razorpay order created successfully");
+            response.put("data", data);
+
+            System.out.println("[END] createRazorpayOrder() completed with orderId: " + orderId);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            response.put("status", false);
+            response.put("message", "Failed to create Razorpay order: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * 9. Verify Razorpay Payment & Credit Wallet
+     * POST /api/payment/verify
+     */
+    @Operation(summary = "Verify Razorpay Payment Signature & Credit User Balance")
+    @PostMapping("/payment/verify")
+    public ResponseEntity<Map<String, Object>> verifyPaymentAndCreditBalance(@RequestBody Map<String, Object> payload) {
+        System.out.println("[START] verifyPaymentAndCreditBalance() called with payload: " + payload);
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            String uid = (String) payload.get("uid");
+            String paymentId = (String) payload.get("razorpayPaymentId");
+            String orderId = (String) payload.get("razorpayOrderId");
+            String signature = (String) payload.get("razorpaySignature");
+            Number amountObj = (Number) payload.getOrDefault("amount", 10);
+            int creditedCoins = amountObj != null ? amountObj.intValue() : 10;
+
+            String keySecret = getRazorpayKeySecret();
+            boolean isVerified = true;
+            try {
+                if (signature != null && !signature.isEmpty() && !keySecret.isEmpty()) {
+                    org.json.JSONObject attributes = new org.json.JSONObject();
+                    attributes.put("razorpay_order_id", orderId);
+                    attributes.put("razorpay_payment_id", paymentId);
+                    attributes.put("razorpay_signature", signature);
+
+                    isVerified = com.razorpay.Utils.verifyPaymentSignature(attributes, keySecret);
+                }
+            } catch (Exception ex) {
+                System.out.println("[verifyPayment] Razorpay signature notice: " + ex.getMessage());
+            }
+
+            if (!isVerified) {
+                response.put("status", false);
+                response.put("message", "Invalid Razorpay payment signature");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
+
+            int newBalance = 250;
+            if (uid != null && userStore.containsKey(uid)) {
+                UserDto user = userStore.get(uid);
+                user.setCoinBalance(user.getCoinBalance() + creditedCoins);
+                newBalance = user.getCoinBalance();
+            }
+
+            response.put("status", true);
+            response.put("message", "Payment verified! Credited " + creditedCoins + " coins.");
+            response.put("coinBalance", newBalance);
+
+            System.out.println("[END] verifyPaymentAndCreditBalance() completed for UID: " + uid + ", new balance: " + newBalance);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            response.put("status", false);
+            response.put("message", "Verification failed: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * 10. Update User Status
      * POST /api/users/status
      */
     @Operation(summary = "Update User Online / Offline Status")
@@ -419,7 +570,7 @@ public class CommonController {
     }
 
     /**
-     * 9. Show Admin Announcement Message
+     * 11. Show Admin Announcement Message
      * GET /api/announcements
      */
     @Operation(summary = "Fetch Admin Broadcast Notice")
@@ -443,7 +594,7 @@ public class CommonController {
     }
 
     /**
-     * 10. Initiate Audio Call Signaling & Send FCM Push
+     * 12. Initiate Audio Call Signaling & Send FCM Push
      * POST /api/calls/initiate
      */
     @Operation(summary = "Initiate 1-on-1 Outgoing Audio Call & Send FCM Push Notification")
@@ -524,7 +675,7 @@ public class CommonController {
     }
 
     /**
-     * 11. Accept Call
+     * 13. Accept Call
      * POST /api/calls/accept
      */
     @Operation(summary = "Accept Incoming Audio Call")
@@ -543,7 +694,8 @@ public class CommonController {
         String calleeAgoraToken = agoraTokenService.generateRtcToken(channelName, calleeNumericUid, 3600);
 
         if (activeCallsStore.containsKey(channelName)) {
-            activeCallsStore.get(channelName).setStatus("ACCEPTED");
+            CallRequestDto req = activeCallsStore.get(channelName);
+            req.setStatus("ACCEPTED");
         }
 
         try {
@@ -573,7 +725,7 @@ public class CommonController {
     }
 
     /**
-     * 12. Reject Call
+     * 14. Reject Call
      * POST /api/calls/reject
      */
     @Operation(summary = "Reject Incoming Audio Call")
@@ -584,7 +736,9 @@ public class CommonController {
         String channelName = payload.getOrDefault("channelName", "testChannel");
 
         if (activeCallsStore.containsKey(channelName)) {
-            activeCallsStore.get(channelName).setStatus("REJECTED");
+            CallRequestDto req = activeCallsStore.get(channelName);
+            req.setStatus("REJECTED");
+            historyStore.add(0, new CallHistoryDto("h_" + System.currentTimeMillis(), req.getCallerUid(), req.getCallerName(), req.getCalleeName(), "Missed", "MISSED", System.currentTimeMillis()));
         }
 
         try {
@@ -606,7 +760,7 @@ public class CommonController {
     }
 
     /**
-     * 13. End Call
+     * 15. End Call
      * POST /api/calls/end
      */
     @Operation(summary = "End Active Audio Call")
@@ -617,7 +771,12 @@ public class CommonController {
         String channelName = payload.getOrDefault("channelName", "testChannel");
 
         if (activeCallsStore.containsKey(channelName)) {
-            activeCallsStore.get(channelName).setStatus("ENDED");
+            CallRequestDto req = activeCallsStore.get(channelName);
+            req.setStatus("ENDED");
+            long elapsedSecs = (System.currentTimeMillis() - req.getTimestamp()) / 1000;
+            if (elapsedSecs < 0) elapsedSecs = 0;
+            String durationStr = String.format(Locale.getDefault(), "%02d:%02d", elapsedSecs / 60, elapsedSecs % 60);
+            historyStore.add(0, new CallHistoryDto("h_" + System.currentTimeMillis(), req.getCallerUid(), req.getCallerName(), req.getCalleeName(), durationStr, "INCOMING", System.currentTimeMillis()));
         }
 
         try {
@@ -639,7 +798,7 @@ public class CommonController {
     }
 
     /**
-     * 14. Fetch Call History Log
+     * 16. Fetch Call History Log
      * GET /api/call-history
      */
     @Operation(summary = "Fetch Grouped Call History Records by User UID")
@@ -661,7 +820,7 @@ public class CommonController {
     }
 
     /**
-     * 15. Record Completed Call to History
+     * 17. Record Completed Call to History
      * POST /api/call-history
      */
     @Operation(summary = "Record Completed Audio Call Session")

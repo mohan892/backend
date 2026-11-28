@@ -5,22 +5,24 @@ public class CallHistoryDto {
     private String userId; // Owner UID for per-user history filtering
     private String callerName;
     private String calleeName;
-    private String duration;
+    private String duration; // e.g. "03:45" or "Missed"
+    private String callType; // "MISSED", "INCOMING", "OUTGOING", "RECEIVED"
     private long timestamp;
 
     public CallHistoryDto() {}
 
-    public CallHistoryDto(String callId, String userId, String callerName, String calleeName, String duration, long timestamp) {
+    public CallHistoryDto(String callId, String userId, String callerName, String calleeName, String duration, String callType, long timestamp) {
         this.callId = callId;
         this.userId = userId;
         this.callerName = callerName;
         this.calleeName = calleeName;
         this.duration = duration;
+        this.callType = callType;
         this.timestamp = timestamp;
     }
 
     public CallHistoryDto(String callId, String callerName, String calleeName, String duration, long timestamp) {
-        this(callId, null, callerName, calleeName, duration, timestamp);
+        this(callId, null, callerName, calleeName, duration, "INCOMING", timestamp);
     }
 
     public String getCallId() { return callId; }
@@ -37,6 +39,9 @@ public class CallHistoryDto {
 
     public String getDuration() { return duration; }
     public void setDuration(String duration) { this.duration = duration; }
+
+    public String getCallType() { return callType != null ? callType : "INCOMING"; }
+    public void setCallType(String callType) { this.callType = callType; }
 
     public long getTimestamp() { return timestamp; }
     public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
